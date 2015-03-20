@@ -399,15 +399,15 @@ def generate_struct_constructor(node):
 
 def generate_union_decode(node):
     discpad = (node.alignment > DISC_SIZE) and (node.alignment - DISC_SIZE) or 0
-    def gen_case(member):
-        return ('case {0}::discriminator_{1}: if (!do_decode_in_place<E>(x.{1}, pos, end)) return false; break;\n'
-            .format(node.name, member.name))
+    def gen_case(member, desc):
+        return ('case {0}::{1}: if (!do_decode_in_place<E>(x.{2}, pos, end)) return false; break;\n'
+            .format(node.name, desc.name, member.name))
     return (
-        'if (!do_decode<E>(x.discriminator, pos, end)) return false;\n'
+        'if (!do_decode<E>(x.{0}, pos, end)) return false;\n'.format(node.discriminator.name)
         + (discpad and 'if (!do_decode_advance({0}, pos, end)) return false;\n'.format(discpad) or '')
-        + 'switch (x.discriminator)\n'
+        + 'switch (x.{0})\n'.format(node.discriminator.name)
         + '{\n'
-        + ''.join('    ' + gen_case(m) for m in node.members)
+        + ''.join('    ' + gen_case(m, desc) for m, desc in zip(node.members, node.discriminator.members))
         + '    ' + 'default: return false;\n'
         + '}\n'
         + 'return do_decode_advance({0}, pos, end);\n'.format(node.byte_size - DISC_SIZE - discpad)
@@ -415,27 +415,27 @@ def generate_union_decode(node):
 
 def generate_union_encode(node):
     discpad = (node.alignment > DISC_SIZE) and (node.alignment - DISC_SIZE) or 0
-    def gen_case(member):
-        return ('case {0}::discriminator_{1}: do_encode<E>(pos, x.{1}); break;\n'
-            .format(node.name, member.name))
+    def gen_case(member, desc):
+        return ('case {0}::{1}: do_encode<E>(pos, x.{2}); break;\n'
+            .format(node.name, desc.name, member.name))
     return (
-        'pos = do_encode<E>(pos, x.discriminator);\n'
+        'pos = do_encode<E>(pos, x.{0});\n'.format(node.discriminator.name)
         + (discpad and 'pos = pos + {0};\n'.format(discpad) or '')
-        + 'switch (x.discriminator)\n'
+        + 'switch (x.{0})\n'.format(node.discriminator.name)
         + '{\n'
-        + ''.join('    ' + gen_case(m) for m in node.members)
+        + ''.join('    ' + gen_case(m, desc) for m, desc in zip(node.members, node.discriminator.members))
         + '}\n'
         + 'pos = pos + {0};\n'.format(node.byte_size - DISC_SIZE - discpad)
     )
 
 def generate_union_print(node):
-    def gen_case(member):
-        return ('case {0}::discriminator_{1}: do_print(out, indent, "{1}", x.{1}); break;\n'
-            .format(node.name, member.name))
+    def gen_case(member, desc):
+        return ('case {0}::{1}: do_print(out, indent, "{2}", x.{2}); break;\n'
+            .format(node.name, desc.name, member.name))
     return (
-        'switch (x.discriminator)\n'
+        'switch (x.{0})\n'.format(node.discriminator.name)
         + '{\n'
-        + ''.join('    ' + gen_case(m) for m in node.members)
+        + ''.join('    ' + gen_case(m, desc) for m, desc in zip(node.members, node.discriminator.members))
         + '}\n'
     )
 
@@ -446,29 +446,36 @@ def generate_union_get_byte_size(node):
     return 'return {0};\n'.format(node.byte_size)
 
 def generate_union_fields(node):
-    body = ',\n'.join('discriminator_{0} = {1}'.format(m.name, m.discriminator) for m in node.members) + '\n'
+    body = ',\n'.join('{0} = {1}'.format(desc.name, desc.value) for desc in node.discriminator.members) + '\n'
     disc_defs = ''.join(
-        'static const prophy::detail::int2type<discriminator_{0}> discriminator_{0}_t;\n'.format(m.name)
-        for m in node.members
+        'static const prophy::detail::int2type<{0}> {0}_t;\n'.format(desc.name)
+        for desc in node.discriminator.members
     )
     fields = ''.join('{0} {1};\n'.format(BUILTIN2C.get(m.type, m.type), m.name) for m in node.members)
-    return 'enum _discriminator\n{\n' + _indent(body) + '} discriminator;\n' + '\n' + disc_defs + '\n' + fields
+    return (
+        'enum _{0}\n{{\n'.format(node.discriminator.name)
+        + _indent(body)
+        + '}} {0};\n'.format(node.discriminator.name)
+        + '\n' + disc_defs + '\n' + fields
+    )
 
 def generate_union_constructor(node):
     inits = [_get_initializer(m) for m in node.members]
     return (
         '{0}(): {1} {{ }}\n'.format(node.name, ', '.join(
-            ['discriminator(discriminator_{0})'.format(node.members[0].name)]
+            ['{0}({1})'.format(node.discriminator.name, node.discriminator.members[0].name)]
             + ['{0}({1})'.format(m.name, init) for m, init in zip(node.members, inits) if init is not None]
         ))
         + ''.join(
-            '{0}(prophy::detail::int2type<discriminator_{1}>, {2} _1): discriminator(discriminator_{1}), {1}(_1) {{ }}\n'
+            '{0}(prophy::detail::int2type<{1}>, {2} _1): {3}({1}), {4}(_1) {{ }}\n'
             .format(
                 node.name,
-                m.name,
-                _const_refize(init is None, BUILTIN2C.get(m.type, m.type))
+                desc.name,
+                _const_refize(init is None, BUILTIN2C.get(m.type, m.type)),
+                node.discriminator.name,
+                m.name
             )
-            for m, init in zip(node.members, inits)
+            for desc, m, init in zip(node.discriminator.members, node.members, inits)
         )
     )
 

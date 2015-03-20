@@ -179,6 +179,10 @@ class Union(object):
 
     def __init__(self, name, members):
         self.name = name
+        self.discriminator = Enum("discriminator", \
+                                  [EnumMember("discriminator_{0}".format(m.name), m.discriminator) \
+                                   for m in members])
+
         self.members = members
 
         self.kind = Kind.FIXED
