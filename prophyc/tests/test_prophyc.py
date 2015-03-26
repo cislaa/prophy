@@ -302,7 +302,7 @@ template <> Test* swap<Test>(Test*);
 """
     assert open("input.pp.cpp").read() == """\
 #include <prophy/detail/prophy.hpp>
-
+#include <algorithm>
 #include "input.pp.hpp"
 
 using namespace prophy::detail;
@@ -403,7 +403,7 @@ template <> U* swap<U>(U*);
 """
     assert open("input.pp.cpp").read() == """\
 #include <prophy/detail/prophy.hpp>
-
+#include <algorithm>
 #include "input.pp.hpp"
 
 using namespace prophy::detail;

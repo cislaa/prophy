@@ -179,13 +179,12 @@ class Union(object):
 
     def __init__(self, name, members):
         self.name = name
-        self.discriminator = Enum("discriminator", \
-                                  [EnumMember("discriminator_{0}".format(m.name), m.discriminator) \
-                                   for m in members])
-
         self.members = members
+        self.discriminator = Enum("discriminator", \
+                             [EnumMember("discriminator_" + m.name, m.discriminator) \
+                              for m in members])
 
-        self.kind = Kind.FIXED
+        self.kind = evaluate_union_kind(self)
         self.byte_size = None
         self.alignment = None
 
@@ -364,12 +363,24 @@ def evaluate_struct_kind(node):
     else:
         return Kind.FIXED
 
+def evaluate_union_kind(node):
+    """Adds kind to Union. Requires cross referenced nodes."""
+    if node.members:
+        if node.members[-1].kind == Kind.UNLIMITED:
+            return Kind.UNLIMITED
+        elif any(x.kind == Kind.DYNAMIC for x in node.members):
+            return Kind.DYNAMIC
+        else:
+            return max(x.kind for x in node.members)
+    else:
+        return Kind.FIXED
+
 def evaluate_member_kind(member):
     """Adds kind to StructMember. Requires cross referenced nodes."""
     def evaluate_node_kind(node):
         while isinstance(node, Typedef):
             node = node.definition
-        if isinstance(node, Struct):
+        if isinstance(node, (Struct, Union)):
             return node.kind
         else:
             return Kind.FIXED
@@ -385,6 +396,11 @@ def evaluate_kinds(nodes):
             for member in node.members:
                 member.kind = evaluate_member_kind(member)
             node.kind = evaluate_struct_kind(node)
+        elif isinstance(node, Union):
+            for member in node.members:
+                member.kind = evaluate_member_kind(member)
+            node.kind = evaluate_union_kind(node)
+
 
 def evaluate_sizes(nodes):
     """

@@ -7,6 +7,18 @@ union Union
     3: BuiltinFixed c;
 };
 
+struct UnionDynamic_Helper
+{
+    u16 x<>;
+};
+
+union UnionDynamic
+{
+    1: u8 a;
+    2: UnionDynamic_Helper b;
+    3: u64 c;
+};
+
 struct BuiltinOptional
 {
     u32* x;

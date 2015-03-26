@@ -166,7 +166,7 @@ def generate_struct_implementation(node):
     return (
         encode_impl(node) + '\n'
         + decode_impl(node) + '\n'
-        + print_impl(node)        
+        + print_impl(node)
     )
 
 def generate_union_implementation(node):
@@ -399,33 +399,46 @@ def generate_struct_constructor(node):
 
 def generate_union_decode(node):
     discpad = (node.alignment > DISC_SIZE) and (node.alignment - DISC_SIZE) or 0
-    def gen_case(member, desc):
-        return ('case {0}::{1}: if (!do_decode_in_place<E>(x.{2}, pos, end)) return false; break;\n'
-            .format(node.name, desc.name, member.name))
+    dynamic = node.kind != model.Kind.FIXED
+    union_size = node.byte_size - DISC_SIZE - discpad
+    decode_func = dynamic and 'do_decode' or 'do_decode_in_place'
+    advance_size = dynamic and 'std::max({0} - (pos - union_pos), (int64_t)0)'.format(union_size) or union_size
+
+    def gen_case(node, member, desc):
+        return ('case {0}::{1}: if (!{3}<E>(x.{2}, pos, end)) return false; break;\n'
+            .format(node.name, desc.name, member.name, decode_func))
     return (
         'if (!do_decode<E>(x.{0}, pos, end)) return false;\n'.format(node.discriminator.name)
         + (discpad and 'if (!do_decode_advance({0}, pos, end)) return false;\n'.format(discpad) or '')
+        + (dynamic and 'const uint8_t* const union_pos = pos;\n' or '')
         + 'switch (x.{0})\n'.format(node.discriminator.name)
         + '{\n'
-        + ''.join('    ' + gen_case(m, desc) for m, desc in zip(node.members, node.discriminator.members))
+        + ''.join('    ' + gen_case(node, m, desc) for m, desc in zip(node.members, node.discriminator.members))
         + '    ' + 'default: return false;\n'
         + '}\n'
-        + 'return do_decode_advance({0}, pos, end);\n'.format(node.byte_size - DISC_SIZE - discpad)
+        + 'return do_decode_advance({0}, pos, end);\n'.format(advance_size)
     )
 
 def generate_union_encode(node):
     discpad = (node.alignment > DISC_SIZE) and (node.alignment - DISC_SIZE) or 0
+    dynamic = node.kind != model.Kind.FIXED
+    union_size = node.byte_size - DISC_SIZE - discpad
+    advance_size = dynamic and 'std::max({0} - (pos - union_pos), (int64_t)0)'.format(union_size) or union_size
+    pos_assignment = dynamic and 'pos = ' or ''
+
     def gen_case(member, desc):
-        return ('case {0}::{1}: do_encode<E>(pos, x.{2}); break;\n'
-            .format(node.name, desc.name, member.name))
+        return ('case {0}::{1}: {3}do_encode<E>(pos, x.{2}); break;\n'
+            .format(node.name, desc.name, member.name, pos_assignment))
+
     return (
         'pos = do_encode<E>(pos, x.{0});\n'.format(node.discriminator.name)
         + (discpad and 'pos = pos + {0};\n'.format(discpad) or '')
+        + (dynamic and 'const uint8_t* const union_pos = pos;\n' or '')
         + 'switch (x.{0})\n'.format(node.discriminator.name)
         + '{\n'
         + ''.join('    ' + gen_case(m, desc) for m, desc in zip(node.members, node.discriminator.members))
         + '}\n'
-        + 'pos = pos + {0};\n'.format(node.byte_size - DISC_SIZE - discpad)
+        + 'pos = pos + {0};\n'.format(advance_size)
     )
 
 def generate_union_print(node):
@@ -440,10 +453,21 @@ def generate_union_print(node):
     )
 
 def generate_union_encoded_byte_size(node):
-    return str(node.byte_size)
+    return (node.kind == model.Kind.FIXED) and str(node.byte_size) or '-1'
 
 def generate_union_get_byte_size(node):
-    return 'return {0};\n'.format(node.byte_size)
+    if node.kind == model.Kind.FIXED:
+        return 'return {0};\n'.format(node.byte_size)
+    else:
+        discpad = (node.alignment > DISC_SIZE) and (node.alignment - DISC_SIZE) or 0
+        ret = 'switch ({0})\n{{'.format(node.discriminator.name)
+        elements = []
+        for m, disc in zip(node.members, node.discriminator.members):
+            size_eval = m.definition and 'std::max({0}.get_byte_size() + {1}, (size_t){2})'.format(m.name, discpad + DISC_SIZE, node.byte_size) \
+                                     or '{}'.format(node.byte_size)
+            elements += [_indent('\ncase {0}: return {1};'.format(disc.name, size_eval, node.byte_size))]
+        default = _indent('\ndefault: return 0;')
+        return ret + ''.join(elements) + default + '\n}\n'
 
 def generate_union_fields(node):
     body = ',\n'.join('{0} = {1}'.format(desc.name, desc.value) for desc in node.discriminator.members) + '\n'

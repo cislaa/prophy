@@ -83,11 +83,11 @@ def _generate_def_union(union):
         typename = primitive_types.get(member.type, member.type)
         return '{0} {1};\n'.format(typename, member.name)
 
-    enum_fields = ',\n'.join('discriminator_{0} = {1}'.format(mem.name,
-                                                              mem.discriminator)
-                             for mem in union.members)
+    enum_fields = ',\n'.join('{0} = {1}'.format(mem.name, mem.value)
+                             for mem in union.discriminator.members)
     union_fields = ''.join(map(gen_member, union.members))
-    enum_def = 'enum _discriminator\n{{\n{0}\n}} discriminator;'.format(_indent(enum_fields, 4))
+    enum_def = 'enum _{0}\n{{\n{1}\n}} {0};'.format(union.discriminator.name,
+                                                    _indent(enum_fields, 4))
     union_def = 'union\n{{\n{0}}};'.format(_indent(union_fields, 4))
     return 'struct {0}\n{{\n{1}\n\n{2}\n}};'.format(union.name,
                                                     _indent(enum_def, 4),
@@ -203,20 +203,29 @@ def _generate_swap_struct(struct):
                      [gen_main(main, parts)])
 
 def _generate_swap_union(union):
+    dynamic = union.kind != model.Kind.FIXED
+    return_eval = dynamic and 'std::max(ptr, payload + 1)' or 'payload + 1'
+    tmp_eval = dynamic and '    {0}* ptr = 0;\n'.format(union.name) or ''
+    swap_eval = 'swap({0})'
+    dynamic_swap_eval = 'ptr = cast<{0}*>({1})'.format(union.name, swap_eval)
     return ('template <>\n'
             '{0}* swap<{0}>({0}* payload)\n'
             '{{\n'
             '    swap(reinterpret_cast<uint32_t*>(&payload->discriminator));\n'
+            '{2}'
             '    switch (payload->discriminator)\n'
             '    {{\n{1}'
             '        default: break;\n'
             '    }}\n'
-            '    return payload + 1;\n'
+            '    return {3};\n'
             '}}\n').format(
                 union.name,
-                ''.join(8 * ' ' + 'case {0}::discriminator_{1}: swap({2}); break;\n'.format(
-                    union.name, m.name, _member_access_statement(m)
-                ) for m in union.members)
+                ''.join(8 * ' ' + 'case {0}::discriminator_{1}: {2}; break;\n'.format(
+                    union.name, m.name,
+                    (m.kind == model.Kind.FIXED and swap_eval or dynamic_swap_eval).format(_member_access_statement(m))
+                ) for m in union.members),
+                tmp_eval,
+                return_eval
             )
 
 _generate_swap_visitor = {
@@ -291,7 +300,8 @@ class CppGenerator(object):
 
     def serialize_string_cpp(self, nodes, basename):
         return '\n'.join((
-            '#include <prophy/detail/prophy.hpp>\n',
+            '#include <prophy/detail/prophy.hpp>',
+            '#include <algorithm>',
             '#include "{0}.pp.hpp"\n'.format(basename),
             'using namespace prophy::detail;\n',
             swap_header,

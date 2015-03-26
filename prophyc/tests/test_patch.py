@@ -357,3 +357,77 @@ def test_make_field_limited_array_with_wrong_bound_params():
     with pytest.raises(Exception) as e:
         patch.patch(nodes, patches)
     assert 'Array len member not found: MyStruct' in str(e.value)
+
+@pytest.fixture(scope = 'session')
+def descrimited_union_nodes():
+    return [model.Enum('MyEnum', [model.EnumMember('enum_1', 1),
+                                  model.EnumMember('enum_2', 2)]),
+            model.Union("MyUnion", [model.UnionMember("a", "u8", 10),
+                                    model.UnionMember("b", "u16", 15)]),
+            model.Struct("MyStruct", [model.StructMember("type", "MyEnum"),
+                                      model.StructMember("union", "MyUnion")])]
+
+def test_make_field_descrimited_union_with_wrong_node_type():
+    nodes = [model.Enum('MyEnum', [model.EnumMember('enum_1', 1)])]
+
+    patches = {'MyEnum': [patch.Action('discriminated', ['union', 'type'])]}
+    with pytest.raises(Exception) as e:
+        patch.patch(nodes, patches)
+    assert 'Can change field only in struct: MyEnum' in str(e.value)
+
+def test_make_field_descrimited_union_with_wrong_number_of_params(descrimited_union_nodes):
+    nodes = descrimited_union_nodes
+
+    patches = {'MyStruct': [patch.Action('discriminated', ['union'])]}
+    with pytest.raises(Exception) as e:
+        patch.patch(nodes, patches)
+    assert 'Change field must have 2 params: MyStruct' in str(e.value)
+
+    patches = {'MyStruct': [patch.Action('discriminated', ['union', 'enum1', 'something'])]}
+    with pytest.raises(Exception) as e:
+        patch.patch(nodes, patches)
+    assert 'Change field must have 2 params: MyStruct' in str(e.value)
+
+def test_make_field_descrimited_union_with_wrong_name_of_param(descrimited_union_nodes):
+    nodes = descrimited_union_nodes
+
+    patches = {'MyStruct': [patch.Action('discriminated', ['wrong_union', 'type'])]}
+    with pytest.raises(Exception) as e:
+        patch.patch(nodes, patches)
+    assert 'Member \"wrong_union\" not found: MyStruct' in str(e.value)
+
+    patches = {'MyStruct': [patch.Action('discriminated', ['union', 'wrong_type'])]}
+    with pytest.raises(Exception) as e:
+        patch.patch(nodes, patches)
+    assert 'Member \"wrong_type\" not found: MyStruct' in str(e.value)
+
+def test_make_field_descrimited_union_with_unknown_type_of_param(descrimited_union_nodes):
+    nodes = [model.Struct("MyStruct", [model.StructMember("type", "MyEnum"),
+                                      model.StructMember("union", "MyUnion")])]
+
+    patches = {'MyStruct': [patch.Action('discriminated', ['union', 'type'])]}
+    with pytest.raises(Exception) as e:
+        patch.patch(nodes, patches)
+    assert 'Union type not found: MyUnion' in str(e.value)
+
+    nodes += [model.Union("MyUnion", [model.UnionMember("a", "u8", 10),
+                                    model.UnionMember("b", "u16", 15)])]
+
+    patches = {'MyStruct': [patch.Action('discriminated', ['union', 'type'])]}
+    with pytest.raises(Exception) as e:
+        patch.patch(nodes, patches)
+    assert 'Discriminator type not found: MyEnum' in str(e.value)
+
+def test_make_field_descrimited_union(descrimited_union_nodes):
+    nodes = descrimited_union_nodes
+
+    patches = {'MyStruct': [patch.Action('discriminated', ['union', 'type'])]}
+    patch.patch(nodes, patches)
+
+    assert [model.Enum('MyEnum', [ model.EnumMember('enum_1', 1),
+                                  model.EnumMember('enum_2', 2)]),
+            model.Union("MyUnion", [model.UnionMember("a", "u8", 10),
+                                     model.UnionMember("b", "u16", 15)]),
+            model.Union('MyStruct', [model.UnionMember('a', 'u8', 1),
+                                     model.UnionMember('b', 'u16', 2)])] == nodes
+

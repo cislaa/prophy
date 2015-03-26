@@ -53,7 +53,26 @@ def Struct():
 def Union():
     return process([
         model.Union('X', [
-            model.UnionMember('a', 'u8', '1')
+            model.UnionMember('a', 'u8', '1'),
+            model.UnionMember('b', 'u32', '2')
+        ])
+    ])
+
+@pytest.fixture(scope = 'session')
+def UnionWithDynamicField():
+    return process([
+        model.Struct('X', [
+                model.StructMember('value', 'u32')
+            ]),
+        model.Struct('Y', [
+                model.StructMember('num_of_value', 'u32'),
+                model.StructMember('value', 'u32', bound = 'num_of_value')
+            ]),
+        model.Union('Z', [
+            model.UnionMember('x', 'X', '1'),
+            model.UnionMember('y', 'Y', '2'),
+            model.UnionMember('value32', 'u32', '3'),
+            model.UnionMember('value64', 'u64', '4')
         ])
     ])
 
@@ -127,19 +146,67 @@ struct X : public prophy::detail::message<X>
 
     enum _discriminator
     {
-        discriminator_a = 1
+        discriminator_a = 1,
+        discriminator_b = 2
     } discriminator;
 
     static const prophy::detail::int2type<discriminator_a> discriminator_a_t;
+    static const prophy::detail::int2type<discriminator_b> discriminator_b_t;
 
     uint8_t a;
+    uint32_t b;
 
-    X(): discriminator(discriminator_a), a() { }
+    X(): discriminator(discriminator_a), a(), b() { }
     X(prophy::detail::int2type<discriminator_a>, uint8_t _1): discriminator(discriminator_a), a(_1) { }
+    X(prophy::detail::int2type<discriminator_b>, uint32_t _1): discriminator(discriminator_b), b(_1) { }
 
     size_t get_byte_size() const
     {
         return 8;
+    }
+};
+"""
+
+def test_generate_union_definition_with_dynamic_fields(UnionWithDynamicField):
+    assert generate_union_definition(UnionWithDynamicField[2]) == """\
+struct Z : public prophy::detail::message<Z>
+{
+    enum { encoded_byte_size = -1 };
+
+    enum _discriminator
+    {
+        discriminator_x = 1,
+        discriminator_y = 2,
+        discriminator_value32 = 3,
+        discriminator_value64 = 4
+    } discriminator;
+
+    static const prophy::detail::int2type<discriminator_x> discriminator_x_t;
+    static const prophy::detail::int2type<discriminator_y> discriminator_y_t;
+    static const prophy::detail::int2type<discriminator_value32> discriminator_value32_t;
+    static const prophy::detail::int2type<discriminator_value64> discriminator_value64_t;
+
+    X x;
+    Y y;
+    uint32_t value32;
+    uint64_t value64;
+
+    Z(): discriminator(discriminator_x), value32(), value64() { }
+    Z(prophy::detail::int2type<discriminator_x>, const X& _1): discriminator(discriminator_x), x(_1) { }
+    Z(prophy::detail::int2type<discriminator_y>, const Y& _1): discriminator(discriminator_y), y(_1) { }
+    Z(prophy::detail::int2type<discriminator_value32>, uint32_t _1): discriminator(discriminator_value32), value32(_1) { }
+    Z(prophy::detail::int2type<discriminator_value64>, uint64_t _1): discriminator(discriminator_value64), value64(_1) { }
+
+    size_t get_byte_size() const
+    {
+        switch (discriminator)
+        {
+            case discriminator_x: return std::max(x.get_byte_size() + 8, (size_t)16);
+            case discriminator_y: return std::max(y.get_byte_size() + 8, (size_t)16);
+            case discriminator_value32: return 16;
+            case discriminator_value64: return 16;
+            default: return 0;
+        }
     }
 };
 """
@@ -237,6 +304,7 @@ uint8_t* message_impl<X>::encode(const X& x, uint8_t* pos)
     switch (x.discriminator)
     {
         case X::discriminator_a: do_encode<E>(pos, x.a); break;
+        case X::discriminator_b: do_encode<E>(pos, x.b); break;
     }
     pos = pos + 4;
     return pos;
@@ -253,6 +321,7 @@ bool message_impl<X>::decode(X& x, const uint8_t*& pos, const uint8_t* end)
     switch (x.discriminator)
     {
         case X::discriminator_a: if (!do_decode_in_place<E>(x.a, pos, end)) return false; break;
+        case X::discriminator_b: if (!do_decode_in_place<E>(x.b, pos, end)) return false; break;
         default: return false;
     }
     return do_decode_advance(4, pos, end);
@@ -267,9 +336,68 @@ void message_impl<X>::print(const X& x, std::ostream& out, size_t indent)
     switch (x.discriminator)
     {
         case X::discriminator_a: do_print(out, indent, "a", x.a); break;
+        case X::discriminator_b: do_print(out, indent, "b", x.b); break;
     }
 }
 template void message_impl<X>::print(const X& x, std::ostream& out, size_t indent);
+"""
+
+def test_generate_union_implementation_with_dynamic_fields(UnionWithDynamicField):
+    assert generate_union_implementation(UnionWithDynamicField[2]) == """\
+template <>
+template <endianness E>
+uint8_t* message_impl<Z>::encode(const Z& x, uint8_t* pos)
+{
+    pos = do_encode<E>(pos, x.discriminator);
+    pos = pos + 4;
+    const uint8_t* const union_pos = pos;
+    switch (x.discriminator)
+    {
+        case Z::discriminator_x: pos = do_encode<E>(pos, x.x); break;
+        case Z::discriminator_y: pos = do_encode<E>(pos, x.y); break;
+        case Z::discriminator_value32: pos = do_encode<E>(pos, x.value32); break;
+        case Z::discriminator_value64: pos = do_encode<E>(pos, x.value64); break;
+    }
+    pos = pos + std::max(8 - (pos - union_pos), (int64_t)0);
+    return pos;
+}
+template uint8_t* message_impl<Z>::encode<native>(const Z& x, uint8_t* pos);
+template uint8_t* message_impl<Z>::encode<little>(const Z& x, uint8_t* pos);
+template uint8_t* message_impl<Z>::encode<big>(const Z& x, uint8_t* pos);
+
+template <>
+template <endianness E>
+bool message_impl<Z>::decode(Z& x, const uint8_t*& pos, const uint8_t* end)
+{
+    if (!do_decode<E>(x.discriminator, pos, end)) return false;
+    if (!do_decode_advance(4, pos, end)) return false;
+    const uint8_t* const union_pos = pos;
+    switch (x.discriminator)
+    {
+        case Z::discriminator_x: if (!do_decode<E>(x.x, pos, end)) return false; break;
+        case Z::discriminator_y: if (!do_decode<E>(x.y, pos, end)) return false; break;
+        case Z::discriminator_value32: if (!do_decode<E>(x.value32, pos, end)) return false; break;
+        case Z::discriminator_value64: if (!do_decode<E>(x.value64, pos, end)) return false; break;
+        default: return false;
+    }
+    return do_decode_advance(std::max(8 - (pos - union_pos), (int64_t)0), pos, end);
+}
+template bool message_impl<Z>::decode<native>(Z& x, const uint8_t*& pos, const uint8_t* end);
+template bool message_impl<Z>::decode<little>(Z& x, const uint8_t*& pos, const uint8_t* end);
+template bool message_impl<Z>::decode<big>(Z& x, const uint8_t*& pos, const uint8_t* end);
+
+template <>
+void message_impl<Z>::print(const Z& x, std::ostream& out, size_t indent)
+{
+    switch (x.discriminator)
+    {
+        case Z::discriminator_x: do_print(out, indent, "x", x.x); break;
+        case Z::discriminator_y: do_print(out, indent, "y", x.y); break;
+        case Z::discriminator_value32: do_print(out, indent, "value32", x.value32); break;
+        case Z::discriminator_value64: do_print(out, indent, "value64", x.value64); break;
+    }
+}
+template void message_impl<Z>::print(const Z& x, std::ostream& out, size_t indent);
 """
 
 @pytest.fixture(scope = 'session')
@@ -2229,15 +2357,19 @@ struct X : public prophy::detail::message<X>
 
     enum _discriminator
     {
-        discriminator_a = 1
+        discriminator_a = 1,
+        discriminator_b = 2
     } discriminator;
 
     static const prophy::detail::int2type<discriminator_a> discriminator_a_t;
+    static const prophy::detail::int2type<discriminator_b> discriminator_b_t;
 
     uint8_t a;
+    uint32_t b;
 
-    X(): discriminator(discriminator_a), a() { }
+    X(): discriminator(discriminator_a), a(), b() { }
     X(prophy::detail::int2type<discriminator_a>, uint8_t _1): discriminator(discriminator_a), a(_1) { }
+    X(prophy::detail::int2type<discriminator_b>, uint32_t _1): discriminator(discriminator_b), b(_1) { }
 
     size_t get_byte_size() const
     {

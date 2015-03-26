@@ -389,6 +389,39 @@ X* swap<X>(X* payload)
 }
 """
 
+def test_swap_dynamic_union():
+    nodes = [
+        model.Struct('S', [ model.StructMember('num_of_value', 'u32'),
+                            model.StructMember('value', 'u32', bound = 'num_of_value')]),
+        model.Union('X', [  model.UnionMember('s', 'S', '1'),
+                            model.UnionMember('value32', 'u32', '2'),
+                            model.UnionMember('value64', 'u64', '3')])
+    ]
+
+    assert generate_swap(nodes) == """\
+template <>
+S* swap<S>(S* payload)
+{
+    swap(&payload->num_of_value);
+    return cast<S*>(swap_n_fixed(payload->value, payload->num_of_value));
+}
+
+template <>
+X* swap<X>(X* payload)
+{
+    swap(reinterpret_cast<uint32_t*>(&payload->discriminator));
+    X* ptr = 0;
+    switch (payload->discriminator)
+    {
+        case X::discriminator_s: ptr = cast<X*>(swap(&payload->s)); break;
+        case X::discriminator_value32: swap(&payload->value32); break;
+        case X::discriminator_value64: swap(&payload->value64); break;
+        default: break;
+    }
+    return std::max(ptr, payload + 1);
+}
+"""
+
 def test_swap_struct_with_fixed_array_of_fixed_elements():
     nodes = [
         model.Struct("X", [
@@ -813,7 +846,7 @@ namespace prophy
 
     assert generate_cpp([], "TestEmpty") == """\
 #include <prophy/detail/prophy.hpp>
-
+#include <algorithm>
 #include \"TestEmpty.pp.hpp\"
 
 using namespace prophy::detail;
@@ -855,7 +888,7 @@ template <> Struct* swap<Struct>(Struct*);
 
     assert generate_cpp(nodes, "TestFile") == """\
 #include <prophy/detail/prophy.hpp>
-
+#include <algorithm>
 #include "TestFile.pp.hpp"
 
 using namespace prophy::detail;

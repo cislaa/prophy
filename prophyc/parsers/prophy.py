@@ -299,12 +299,6 @@ class Parser(object):
                 line, pos
             )
             discriminatorvalues.add(member.discriminator)
-        for member, line, pos in t[3]:
-            self._parser_check(
-                member.kind == Kind.FIXED,
-                "dynamic union arm '{}'".format(member.name),
-                line, pos
-            )
 
         node = Union(t[2], [x for x, _, _ in t[3]])
         self.typedecls[t[2]] = node
