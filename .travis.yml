@@ -5,7 +5,7 @@ python:
     - "3.2"
 install:
     - sudo apt-get update -qq
-    - sudo apt-get install -qq clang
+    - sudo apt-get install -qq clang libclang-dev libclang-common libgtest-dev libgtest0 google-mock
     - pip install pytest-cov ply clang
 
 script: 
