@@ -16,7 +16,8 @@ install:
     - pip install pytest-cov ply
 
 script:
-    - py.test --cov -vv -rxsE .
+    - py.test -vv -rxsE --cov .
     - cd prophy_cpp
     - ./waf configure_test test -j1
+    - cat /home/travis/build/cislaa/prophy/prophy_cpp/build/config.log
     - ./waf dist
