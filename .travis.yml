@@ -5,10 +5,10 @@ python:
     - "3.2"
 install:
     - sudo apt-get update -qq
-    - sudo apt-get install -qq clang libclang-dev
+    - sudo apt-get install -qq clang-3.7 libclang-3.7-dev python-clang-3.7
     - sudo apt-get install -qq libgtest-dev google-mock valgrind
     - "cd /usr/src/gtest && sudo cmake . && sudo cmake --build . && sudo mv libg* /usr/local/lib/ ; cd -"
-    - pip install pytest-cov ply clang
+    - pip install pytest-cov ply
 
 script: 
     - py.test --cov .
