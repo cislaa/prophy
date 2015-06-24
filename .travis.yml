@@ -3,14 +3,20 @@ language: python
 python:
     - "2.7"
     - "3.2"
-install:
+before_install:
+    - echo "deb http://llvm.org/apt/precise/ llvm-toolchain-precise main" | sudo tee -a /etc/apt/sources.list
+    - echo "deb http://llvm.org/apt/precise/ llvm-toolchain-precise-3.6 main" | sudo tee -a /etc/apt/sources.list
+    - echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu precise main" | sudo tee -a /etc/apt/sources.list
     - sudo apt-get update -qq
-    - sudo apt-get install -qq clang-3.4 libclang-3.4-dev python-clang-3.4
+
+install:
+    - sudo apt-get install --allow-unauthenticated -qq clang-3.6 libclang-3.6-dev python-clang-3.6
     - sudo apt-get install -qq libgtest-dev google-mock valgrind
     - "cd /usr/src/gtest && sudo cmake . && sudo cmake --build . && sudo mv libg* /usr/local/lib/ ; cd -"
     - pip install pytest-cov ply
 
-script: 
+script:
     - py.test --cov .
     - cd prophy_cpp
     - ./waf configure_test test -j1
+    - ./waf dist
