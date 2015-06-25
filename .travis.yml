@@ -8,7 +8,7 @@ env:
     global:
         - CLANG_VER="3.5"
     matrix:
-        - CXX = clang++
+        - COMPILER=clang++
 
 before_install:
     - sudo apt-add-repository "deb http://llvm.org/apt/precise/ llvm-toolchain-precise main" --yes
@@ -34,7 +34,7 @@ install:
 script:
     - py.test --cov .
     - cd prophy_cpp
-    - ./waf configure_test test -j1
+    - CXX=$COMPILER ./waf configure_test test -j1
     - ./waf dist
 
 notifications:
