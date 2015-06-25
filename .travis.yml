@@ -11,9 +11,12 @@ before_install:
     - sudo apt-get update -qq
 
 install:
-    - sudo apt-get install --allow-unauthenticated -qq clang-3.5 libclang-3.5 libclang-3.5-dev python-clang-3.5
-    - pip install -qq clang==3.5
-    - sudo ln -v -s /usr/lib/x86_64-linux-gnu/libclang-3.5.so.1 /usr/lib/x86_64-linux-gnu/libclang.so
+    - export CLANG_VER="3.5"
+    - sudo apt-get install --allow-unauthenticated -qq clang-$CLANG_VER libclang-$CLANG_VER libclang-$CLANG_VER-dev python-clang-$CLANG_VER
+    - pip install -qq clang==$CLANG_VER 2to3
+    - export PYTHON_SITE_PACKAGES=`python -m site --user-site`
+    - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then 2to3 -wno $PYTHON_SITE_PACKAGES/clang $PYTHON_SITE_PACKAGES/clang
+    - sudo ln -v -s /usr/lib/x86_64-linux-gnu/libclang-$CLANG_VER.so.1 /usr/lib/x86_64-linux-gnu/libclang.so
     - sudo ldconfig
     - sudo apt-get install -qq libgtest-dev google-mock valgrind
     - "cd /usr/src/gtest && sudo cmake . && sudo cmake --build . && sudo mv libg* /usr/local/lib/ ; cd -"
@@ -24,3 +27,6 @@ script:
     - cd prophy_cpp
     - ./waf configure_test test -j1
     - ./waf dist
+
+notifications:
+    email: false
