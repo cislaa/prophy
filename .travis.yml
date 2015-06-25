@@ -3,29 +3,36 @@ language: python
 python:
     - "2.7"
     - "3.2"
+
+env:
+    global:
+        - CLANG_VER="3.5"
+    matrix:
+        - CXX = clang++
+
 before_install:
     - sudo apt-add-repository "deb http://llvm.org/apt/precise/ llvm-toolchain-precise main" --yes
-    - sudo apt-add-repository "deb http://llvm.org/apt/precise/ llvm-toolchain-precise-3.5 main" --yes
+    - sudo apt-add-repository "deb http://llvm.org/apt/precise/ llvm-toolchain-precise-$CLANG_VER main" --yes
     - sudo apt-add-repository "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu precise main" --yes
     - wget -O - http://llvm.org/apt/llvm-snapshot.gpg.key| sudo apt-key add -
     - sudo apt-get update -qq
 
 install:
-    - export CLANG_VER="3.5"
+    # Install clang dependencies
     - sudo apt-get install --allow-unauthenticated -qq clang-$CLANG_VER libclang-$CLANG_VER libclang-$CLANG_VER-dev python-clang-$CLANG_VER
     - pip install -qq clang==$CLANG_VER
-#   - export PYTHON_SITE_PACKAGES=`python -m site --user-site`i
-    - export PYTHON_SITE_PACKAGES=`pip show -f clang | grep -i location | cut -f 2 -d " "`
-    - ls $PYTHON_SITE_PACKAGES
-    - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then 2to3 -wno $PYTHON_SITE_PACKAGES/clang $PYTHON_SITE_PACKAGES/clang; fi
+    - export PYTHON_CLANG_DIR=`pip show -f clang | grep -i location | cut -f 2 -d " "`
+    - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then 2to3 -wno $PYTHON_CLANG_DIR/clang $PYTHON_CLANG_DIR/clang; fi
     - sudo ln -v -s /usr/lib/x86_64-linux-gnu/libclang-$CLANG_VER.so.1 /usr/lib/x86_64-linux-gnu/libclang.so
     - sudo ldconfig
+    # Install gtest and gmock dependencies
     - sudo apt-get install -qq libgtest-dev google-mock valgrind
     - "cd /usr/src/gtest && sudo cmake . && sudo cmake --build . && sudo mv libg* /usr/local/lib/ ; cd -"
+    # prophy dependencies
     - pip install pytest-cov ply
 
 script:
-    - py.test -vv -rxsE --cov .
+    - py.test --cov .
     - cd prophy_cpp
     - ./waf configure_test test -j1
     - ./waf dist
