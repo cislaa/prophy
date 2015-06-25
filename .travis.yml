@@ -14,10 +14,10 @@ install:
     - export CLANG_VER="3.5"
     - sudo apt-get install --allow-unauthenticated -qq clang-$CLANG_VER libclang-$CLANG_VER libclang-$CLANG_VER-dev python-clang-$CLANG_VER
     - pip install -qq clang==$CLANG_VER
-      #    - export PYTHON_SITE_PACKAGES=`python -m site --user-site`i
+#   - export PYTHON_SITE_PACKAGES=`python -m site --user-site`i
     - export PYTHON_SITE_PACKAGES=`pip show -f clang | grep -i location | cut -f 2 -d " "`
     - ls $PYTHON_SITE_PACKAGES
-     - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then 2to3 -wno $PYTHON_SITE_PACKAGES/clang $PYTHON_SITE_PACKAGES/clang; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == 3* ]]; then 2to3 -wno $PYTHON_SITE_PACKAGES/clang $PYTHON_SITE_PACKAGES/clang; fi
     - sudo ln -v -s /usr/lib/x86_64-linux-gnu/libclang-$CLANG_VER.so.1 /usr/lib/x86_64-linux-gnu/libclang.so
     - sudo ldconfig
     - sudo apt-get install -qq libgtest-dev google-mock valgrind
