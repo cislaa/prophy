@@ -15,7 +15,7 @@ def configure(ctx):
 
 def configure_test(ctx):
     ctx.load('compiler_cxx python waf_unit_test')
-    ctx.check(lib = 'gtest gmock')
+    ctx.check(lib = 'gtest')
     ctx.check_python_module('ply')
     ctx.check_python_module('clang')
     if not ctx.options.no_valgrind:
