@@ -9,8 +9,8 @@ env:
         - CLANG_VER="3.5"
         - GCC_VER="4.8"
     matrix:
-        - COMPILER=clang
-        - COMPILER=gcc
+        - CXX=clang
+        - CXX=gcc
 
 before_install:
     - sudo apt-add-repository "deb http://llvm.org/apt/precise/ llvm-toolchain-precise main" --yes
@@ -30,10 +30,10 @@ install:
     - sudo ln -v -s /usr/lib/x86_64-linux-gnu/libclang-$CLANG_VER.so.1 /usr/lib/x86_64-linux-gnu/libclang.so
     - sudo ldconfig
     # Update compiler
-    - if [ "$COMPILER" = "gcc" ]; then export CXX="g++-$GCC_VER" CC="gcc-$GCC_VER"; fi
-    - if [ "$COMPILER" = "clang" ]; then export CXX="clang++" CC="clang"; fi
+    - if [ "$CXX" = "gcc" ]; then export CXX="g++-$GCC_VER" CC="gcc-$GCC_VER"; fi
+    - if [ "$CXX" = "clang" ]; then export CXX="clang++" CC="clang"; fi
     # Install gtest and gmock dependencies
-    - sudo apt-get install -qq libgtest-dev google-mock valgrind
+    - sudo apt-get install -qq libgtest-dev valgrind
     - "cd /usr/src/gtest && sudo cmake . && sudo cmake --build . && sudo mv libg* /usr/local/lib/ ; cd -"
     # python dependencies
     - pip install pytest-cov ply
@@ -42,7 +42,6 @@ script:
     - py.test --cov .
     - cd prophy_cpp
     - ./waf configure_test test -j1
-    - if [ -f ./build/config.log ]; then cat ./build/config.log ; fi
     - ./waf dist
 
 notifications:
