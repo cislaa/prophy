@@ -45,7 +45,7 @@ def test(ctx):
         target = 'test_prophy',
         source = ctx.path.ant_glob('test/**.cpp'),
         use = ['prophy_codecs'],
-        lib = ['gtest', 'gmock'] + os_lib,
+        lib = ['gtest'] + os_lib,
         install_path = None
     )
 
