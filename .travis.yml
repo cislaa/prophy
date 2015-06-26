@@ -9,7 +9,7 @@ env:
         - CLANG_VER="3.5"
         - GCC_VER="4.8"
     matrix:
-        - COMPILER=clang++
+        - COMPILER=clang
         - COMPILER=gcc
 
 before_install:
