@@ -42,6 +42,7 @@ script:
     - py.test --cov .
     - cd prophy_cpp
     - ./waf configure_test test -j1
+    - if [ -f ./build/config.log ]; then cat ./build/config.log ; fi
     - ./waf dist
 
 notifications:
