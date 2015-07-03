@@ -204,10 +204,18 @@ def _generate_swap_struct(struct):
 
 def _generate_swap_union(union):
     dynamic = union.kind != model.Kind.FIXED
-    return_eval = dynamic and 'std::max(ptr, payload + 1)' or 'payload + 1'
-    tmp_eval = dynamic and '    {0}* ptr = 0;\n'.format(union.name) or ''
-    swap_eval = 'swap({0})'
-    dynamic_swap_eval = 'ptr = cast<{0}*>({1})'.format(union.name, swap_eval)
+    return_part = dynamic and 'std::max(ptr, payload + 1)' or 'payload + 1'
+    tmp_part = dynamic and '    {0}* ptr = 0;\n'.format(union.name) or ''
+
+    def gen_cases(members):
+        swap = 'swap({0})'
+        dynamic_swap = 'ptr = cast<{0}*>({1})'.format(union.name, swap)
+
+        return (''.join(8 * ' ' + 'case {0}::discriminator_{1}: {2}; break;\n'.format(
+            union.name, m.name,
+            (m.kind == model.Kind.FIXED and swap or dynamic_swap).format(_member_access_statement(m))
+        ) for m in members))
+
     return ('template <>\n'
             '{0}* swap<{0}>({0}* payload)\n'
             '{{\n'
@@ -218,15 +226,7 @@ def _generate_swap_union(union):
             '        default: break;\n'
             '    }}\n'
             '    return {3};\n'
-            '}}\n').format(
-                union.name,
-                ''.join(8 * ' ' + 'case {0}::discriminator_{1}: {2}; break;\n'.format(
-                    union.name, m.name,
-                    (m.kind == model.Kind.FIXED and swap_eval or dynamic_swap_eval).format(_member_access_statement(m))
-                ) for m in union.members),
-                tmp_eval,
-                return_eval
-            )
+            '}}\n').format(union.name, gen_cases(union.members), tmp_part, return_part)
 
 _generate_swap_visitor = {
     model.Struct: _generate_swap_struct,
